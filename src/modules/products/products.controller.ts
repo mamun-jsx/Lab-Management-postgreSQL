@@ -9,14 +9,52 @@ import AppError from "../../errors/AppError";
  * Creates a new syringe product log record
  */
 const addProducts = catchAsync(async (req: Request, res: Response) => {
-  const { materialDescription, quantity } = req.body;
+  const {
+    materialDescription,
+    quantity,
+    contentCode,
+    batchLot,
+    prodDate,
+    expiryDate,
+    custPartNo,
+    orderNumber
+  } = req.body;
 
-  // Basic validation check
-  if (!materialDescription || !quantity) {
-    throw new AppError(400, "Required fields (materialDescription, quantity) are missing");
+  // Comprehensive validation checks
+  if (
+    materialDescription === undefined || materialDescription === null || String(materialDescription).trim() === "" ||
+    quantity === undefined || quantity === null ||
+    contentCode === undefined || contentCode === null || String(contentCode).trim() === "" ||
+    batchLot === undefined || batchLot === null || String(batchLot).trim() === "" ||
+    prodDate === undefined || prodDate === null || String(prodDate).trim() === "" ||
+    expiryDate === undefined || expiryDate === null || String(expiryDate).trim() === "" ||
+    custPartNo === undefined || custPartNo === null || String(custPartNo).trim() === "" ||
+    orderNumber === undefined || orderNumber === null || String(orderNumber).trim() === ""
+  ) {
+    throw new AppError(400, "All fields (materialDescription, quantity, contentCode, batchLot, prodDate, expiryDate, custPartNo, orderNumber) are required and cannot be empty.");
   }
 
-  const result = await ProductServices.createProductInDB(req.body);
+  const qty = Number(quantity);
+  if (isNaN(qty) || qty <= 0 || !Number.isInteger(qty)) {
+    throw new AppError(400, "Quantity must be a valid positive integer.");
+  }
+
+  const parsedProdDate = new Date(prodDate);
+  const parsedExpiryDate = new Date(expiryDate);
+  if (isNaN(parsedProdDate.getTime()) || isNaN(parsedExpiryDate.getTime())) {
+    throw new AppError(400, "Production date and Expiry date must be valid date values.");
+  }
+
+  const result = await ProductServices.createProductInDB({
+    materialDescription: String(materialDescription).trim(),
+    quantity: qty,
+    contentCode: String(contentCode).trim(),
+    batchLot: String(batchLot).trim(),
+    prodDate: parsedProdDate,
+    expiryDate: parsedExpiryDate,
+    custPartNo: String(custPartNo).trim(),
+    orderNumber: String(orderNumber).trim(),
+  });
 
   sendResponse(res, {
     statusCode: 201,
@@ -108,7 +146,75 @@ const updateProduct = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(404, "Product not found");
   }
 
-  const result = await ProductServices.updateProductInDB(id, req.body);
+  // Validate incoming update fields
+  const updates: any = {};
+  
+  if (req.body.materialDescription !== undefined) {
+    if (req.body.materialDescription === null || String(req.body.materialDescription).trim() === "") {
+      throw new AppError(400, "Material description cannot be empty.");
+    }
+    updates.materialDescription = String(req.body.materialDescription).trim();
+  }
+
+  if (req.body.quantity !== undefined) {
+    const qty = Number(req.body.quantity);
+    if (isNaN(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      throw new AppError(400, "Quantity must be a valid positive integer.");
+    }
+    updates.quantity = qty;
+  }
+
+  if (req.body.contentCode !== undefined) {
+    if (req.body.contentCode === null || String(req.body.contentCode).trim() === "") {
+      throw new AppError(400, "Content Code (GTIN) cannot be empty.");
+    }
+    updates.contentCode = String(req.body.contentCode).trim();
+  }
+
+  if (req.body.batchLot !== undefined) {
+    if (req.body.batchLot === null || String(req.body.batchLot).trim() === "") {
+      throw new AppError(400, "Batch / Lot cannot be empty.");
+    }
+    updates.batchLot = String(req.body.batchLot).trim();
+  }
+
+  if (req.body.prodDate !== undefined) {
+    if (req.body.prodDate === null || String(req.body.prodDate).trim() === "") {
+      throw new AppError(400, "Production date cannot be empty.");
+    }
+    const parsedDate = new Date(req.body.prodDate);
+    if (isNaN(parsedDate.getTime())) {
+      throw new AppError(400, "Production date must be a valid date value.");
+    }
+    updates.prodDate = parsedDate;
+  }
+
+  if (req.body.expiryDate !== undefined) {
+    if (req.body.expiryDate === null || String(req.body.expiryDate).trim() === "") {
+      throw new AppError(400, "Expiry date cannot be empty.");
+    }
+    const parsedDate = new Date(req.body.expiryDate);
+    if (isNaN(parsedDate.getTime())) {
+      throw new AppError(400, "Expiry date must be a valid date value.");
+    }
+    updates.expiryDate = parsedDate;
+  }
+
+  if (req.body.custPartNo !== undefined) {
+    if (req.body.custPartNo === null || String(req.body.custPartNo).trim() === "") {
+      throw new AppError(400, "Customer Part Number cannot be empty.");
+    }
+    updates.custPartNo = String(req.body.custPartNo).trim();
+  }
+
+  if (req.body.orderNumber !== undefined) {
+    if (req.body.orderNumber === null || String(req.body.orderNumber).trim() === "") {
+      throw new AppError(400, "Order Number cannot be empty.");
+    }
+    updates.orderNumber = String(req.body.orderNumber).trim();
+  }
+
+  const result = await ProductServices.updateProductInDB(id, updates);
 
   sendResponse(res, {
     statusCode: 200,

@@ -1,6 +1,6 @@
 # Lab Management System - Backend API
 
-This is the backend API repository for the **Lab Management System**, built with Node.js, Express, TypeScript, and Prisma ORM with PostgreSQL. It handles the business logic, database operations, and QR code generation for managing syringe orders and laboratory products.
+This is the backend REST API service for the **Lab Management System**, built with Node.js, Express, TypeScript, and Prisma ORM with PostgreSQL. It manages user authentication, role-based authorization, inventory data logs, dynamic QR barcode compilation, and provides a centralized global error interception framework.
 
 ### Frontend Repository
 The frontend for this project is built using Next.js and can be found here:
@@ -8,23 +8,46 @@ The frontend for this project is built using Next.js and can be found here:
 
 ---
 
-## Features
+## Backend Features
 
-- **RESTful API**: Express routes for adding, fetching, and retrieving detailed info about syringe orders.
-- **Database Management**: Integrated with PostgreSQL using Prisma ORM.
-- **QR Code Generation**: Uses `bwip-js` to dynamically generate scanable QR codes that point to specific item detail pages on the frontend.
-- **TypeScript**: Typed application logic for safety and developer productivity.
+- **JWT-Based Authentication & Route Protection**:
+  - Secure login endpoint comparing hashed passwords via `bcrypt`.
+  - Generates token claims with a 7-day expiration time.
+  - Express route-guard middleware (`auth`) verifying Bearer tokens and enforcing permission levels (`ADMIN`, `USER`).
+
+- **Centralized User Management API**:
+  - CRUD operations to register, list, fetch, edit, or delete staff records.
+  - Safe selection fields that omit password fields when returning account structures.
+  - Specific business logic preventing modification/deletion of default demo admin (`EMP-1`) and user (`EMP-2`) accounts.
+
+- **Inventory Logging & Syringe Tracking**:
+  - Secure product registry (`/api/add-items`, `/api/get-items`) supporting full laboratory inventory CRUD.
+  - Rigorous server-side payload validation ensuring all required attributes (`materialDescription`, `quantity`, `contentCode`, `batchLot`, `prodDate`, `expiryDate`, `custPartNo`, `orderNumber`) are populated and correctly formatted before executing query transactions.
+  - Date casting and range validations ensuring clean storage in PostgreSQL.
+
+- **Dynamic Barcode/QR Generation Service**:
+  - GET `/api/qr/:id` parses requested record IDs and checks for database existence.
+  - Integrates `bwip-js` internally to encode the frontend landing destination URL (`/product/:id`).
+  - Streams high-fidelity barcode labels directly as `image/png` formats for seamless client-side loading and printing.
+
+- **Prisma & DB Error Mapping Middleware**:
+  - Global error filter catching and resolving internal errors.
+  - Specialized adapters checking for Prisma Client exceptions:
+    - **P2002**: Translates database unique constraints (e.g. duplicate email/employee ID) into a clean validation warning.
+    - **P2025**: Converts database record-not-found failures to user-friendly resource warnings.
+    - **P2003**: Handles database foreign key constraint failures.
+    - Intercepts general validation failures and database initialization errors, replying with standard HTTP status codes (`400`, `404`, `500`) instead of leaking Prisma stack traces or system file structures.
 
 ---
 
 ## Tech Stack
 
-- **Runtime**: Node.js
-- **Framework**: Express (v5)
-- **Database**: PostgreSQL (hosted via Neon DB or local)
-- **ORM**: Prisma Client
-- **Programming Language**: TypeScript
-- **Utilities**: `bwip-js` (QR/barcode generation), `bcrypt` (hashing), `jsonwebtoken` (auth tokens), `zod` (validation)
+- **Runtime Environment**: Node.js
+- **Web Framework**: Express (v5)
+- **Database Engine**: PostgreSQL (integrated via Neon DB serverless client)
+- **Database ORM**: Prisma ORM with `@prisma/adapter-pg`
+- **Language**: TypeScript
+- **Utilities**: `bwip-js` (QR rendering), `bcrypt` (password hashing), `jsonwebtoken` (JWT creation/verification)
 
 ---
 
@@ -35,7 +58,7 @@ Follow these steps to set up and run the backend server locally:
 ### 1. Prerequisites
 Ensure you have the following installed on your machine:
 - [Node.js](https://nodejs.org/) (v18+ recommended)
-- A running [PostgreSQL](https://www.postgresql.org/) database instance (or a cloud provider like Neon/Supabase)
+- A running [PostgreSQL](https://www.postgresql.org/) database instance (or cloud connection using Neon)
 
 ### 2. Clone the Repository
 ```bash
@@ -58,11 +81,11 @@ Add the following configuration variables inside `.env`:
 PORT=4001
 DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require"
 FRONTEND_URL="http://localhost:3000"
+JWT_SECRET="your_jwt_secret_key"
 ```
-> **Note:** Customize `DATABASE_URL` with your database credentials. `FRONTEND_URL` is used for mapping QR code scan paths to point to the correct frontend client host.
 
 ### 5. Run Database Migrations & Generate Prisma Client
-Sync the database schema with your PostgreSQL instance and generate the local Prisma Client:
+Sync the database schema with your PostgreSQL instance:
 ```bash
 # Generate the Prisma client
 npx prisma generate
@@ -72,11 +95,10 @@ npx prisma db push
 ```
 
 ### 6. Start the Development Server
-Run the development server with hot-reloading:
 ```bash
 npm run dev
 ```
-The server will start running at `http://localhost:4001` (or whichever port you configured in your `.env` file).
+The server will start running at `http://localhost:4001`.
 
 ### 7. Build for Production
 To compile TypeScript and start the production build:
@@ -89,32 +111,32 @@ npm start
 
 ## API Endpoints
 
-### Products/Syringe Orders Routes
-All routes are prefixed with `/api`.
+All routes are prefixed with `/api`. Secure routes require a `Authorization: Bearer <token>` header.
 
-| HTTP Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/add-items` | Creates a new syringe order/product |
-| `GET` | `/api/get-items` | Retrieves all syringe orders/products |
-| `GET` | `/api/get-items/:id` | Retrieves a single syringe order by ID |
-| `GET` | `/api/qr/:id` | Generates and sends a QR code image (`image/png`) linking to the frontend detail page |
+### Products / Syringe Orders Routes
 
-#### Sample Request Body for `POST /api/add-items`
-```json
-{
-  "materialDescription": "Sterile Syringe 10ml",
-  "quantity": 1000,
-  "contentCode": "SYR-10ML-001",
-  "batchLot": "LOT2026-A",
-  "prodDate": "2026-05-26T12:00:00Z",
-  "expiryDate": "2029-05-26T12:00:00Z",
-  "custPartNo": "CPN-8849",
-  "orderNumber": "ORD-100234"
-}
-```
+| HTTP Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/add-items` | `ADMIN`, `USER` | Creates a new syringe log |
+| `GET` | `/api/get-items` | `ADMIN`, `USER` | Retrieves all syringe logs |
+| `GET` | `/api/get-items/:id` | `ADMIN`, `USER` | Retrieves a single syringe log by ID |
+| `PUT` | `/api/get-items/:id` | `ADMIN`, `USER` | Updates product details by ID |
+| `DELETE` | `/api/get-items/:id` | `ADMIN` | Deletes product from DB |
+| `GET` | `/api/qr/:id` | Public | Generates and sends a QR code png image linking to the frontend landing sheet |
+
+### User Accounts Routes
+
+| HTTP Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/users/login` | Public | Authenticates credentials and returns a JWT token |
+| `POST` | `/api/users` | `ADMIN` | Creates a new user profile |
+| `GET` | `/api/users` | `ADMIN`, `USER` | Retrieves all user records |
+| `GET` | `/api/users/:id` | `ADMIN`, `USER` | Retrieves a single user record by ID |
+| `PUT` | `/api/users/:id` | `ADMIN`, `USER` | Updates account details |
+| `DELETE` | `/api/users/:id` | `ADMIN` | Removes user account |
 
 ---
 
 ## License
 
-This project is licensed under the [ISC License](LICENSE).
+This project is private and proprietary.
