@@ -100,9 +100,47 @@ const generateQR = catchAsync(async (req: Request, res: Response) => {
   );
 });
 
+const updateProduct = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+
+  const productExists = await ProductServices.getProductByIdFromDB(id);
+  if (!productExists) {
+    throw new AppError(404, "Product not found");
+  }
+
+  const result = await ProductServices.updateProductInDB(id, req.body);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Product updated successfully",
+    data: result,
+  });
+});
+
+const deleteProduct = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+
+  const productExists = await ProductServices.getProductByIdFromDB(id);
+  if (!productExists) {
+    throw new AppError(404, "Product not found");
+  }
+
+  const result = await ProductServices.deleteProductFromDB(id);
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Product deleted successfully",
+    data: result,
+  });
+});
+
 export const products = {
   addProducts,
   getAllProducts,
   getProductById,
   generateQR,
+  updateProduct,
+  deleteProduct,
 };

@@ -44,8 +44,33 @@ const getProductByIdFromDB = async (id: string) => {
   return result;
 };
 
+const updateProductInDB = async (id: string, payload: Partial<ISyringeOrderPayload>) => {
+  const dataToUpdate: any = { ...payload };
+  if (payload.prodDate) {
+    dataToUpdate.prodDate = new Date(payload.prodDate);
+  }
+  if (payload.expiryDate) {
+    dataToUpdate.expiryDate = new Date(payload.expiryDate);
+  }
+
+  const result = await prisma.syringeOrder.update({
+    where: { id },
+    data: dataToUpdate,
+  });
+  return result;
+};
+
+const deleteProductFromDB = async (id: string) => {
+  const result = await prisma.syringeOrder.delete({
+    where: { id },
+  });
+  return result;
+};
+
 export const ProductServices = {
   createProductInDB,
   getAllProductsFromDB,
   getProductByIdFromDB,
+  updateProductInDB,
+  deleteProductFromDB,
 };
