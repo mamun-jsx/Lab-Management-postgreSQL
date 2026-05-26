@@ -1,0 +1,30 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SyringeOrder {
+  id                  String   @id @default(uuid())
+  quantity            Int
+  contentCode         String
+  expiryDate          DateTime
+  batchLot            String
+  prodDate            DateTime
+  materialDescription String
+  custPartNo          String
+  orderNumber         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
