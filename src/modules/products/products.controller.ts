@@ -1,142 +1,108 @@
 import { Request, Response } from "express";
-import { prisma } from "../../lib/prisma";
 import bwipjs from "bwip-js";
-// add products
-export const addProducts = async (req: Request, res: Response) => {
-  try {
-    const {
-      materialDescription,
-      quantity,
-      contentCode,
-      batchLot,
-      prodDate,
-      expiryDate,
-      custPartNo,
-      orderNumber,
-    } = req.body;
+import catchAsync from "../../utils/catchAsync";
+import sendResponse from "../../utils/sendResponse";
+import { ProductServices } from "./products.service";
+import AppError from "../../errors/AppError";
 
-    // Optional: basic validation
-    if (!materialDescription || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: "Required fields are missing",
-      });
+/**
+ * Creates a new syringe product log record
+ */
+const addProducts = catchAsync(async (req: Request, res: Response) => {
+  const { materialDescription, quantity } = req.body;
+
+  // Basic validation check
+  if (!materialDescription || !quantity) {
+    throw new AppError(400, "Required fields (materialDescription, quantity) are missing");
+  }
+
+  const result = await ProductServices.createProductInDB(req.body);
+
+  sendResponse(res, {
+    statusCode: 201,
+    success: true,
+    message: "Product created successfully",
+    data: result,
+  });
+});
+
+/**
+ * Retrieves all product logs
+ */
+const getAllProducts = catchAsync(async (req: Request, res: Response) => {
+  const result = await ProductServices.getAllProductsFromDB();
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Products fetched successfully",
+    data: result,
+  });
+});
+
+/**
+ * Retrieves a single product log by database ID
+ */
+const getProductById = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const result = await ProductServices.getProductByIdFromDB(id);
+
+  if (!result) {
+    throw new AppError(404, "Product not found");
+  }
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Product fetched successfully",
+    data: result,
+  });
+});
+
+/**
+ * Generates and returns a QR barcode image pointing to the product landing view
+ */
+const generateQR = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new AppError(400, "Product ID is required");
+  }
+
+  // Verify the product exists in the DB first before compiling QR
+  const productExists = await ProductServices.getProductByIdFromDB(id);
+  if (!productExists) {
+    throw new AppError(404, "Product not found");
+  }
+
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const productUrl = `${baseUrl}/product/${id}`;
+
+  // Call barcode generator callback
+  bwipjs.toBuffer(
+    {
+      bcid: "qrcode", 
+      text: productUrl, 
+      scale: 4, 
+    },
+    function (err, png) {
+      if (err) {
+        console.error("bwipjs error:", err);
+        res.status(500).json({
+          success: false,
+          message: "Failed to generate QR code",
+        });
+      } else {
+        res.setHeader("Content-Type", "image/png");
+        res.status(200).send(png);
+      }
     }
-
-    const savedItem = await prisma.syringeOrder.create({
-      data: {
-        materialDescription,
-        quantity,
-        contentCode,
-        batchLot,
-        prodDate: new Date(prodDate),
-        expiryDate: new Date(expiryDate),
-        custPartNo,
-        orderNumber,
-      },
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Product created successfully",
-      data: savedItem,
-    });
-  } catch (error) {
-    console.error("Error creating product:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
-  }
-};
-
-export const getAllProducts = async (req: Request, res: Response) => {
-  try {
-    const products = await prisma.syringeOrder.findMany();
-    return res.status(200).json({
-      success: true,
-      message: "Products fetched successfully",
-      data: products,
-    });
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
-  }
-};
-
-export const generateQR = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Product ID is required" });
-    }
-
-    // 1. Create the link you want the QR code to point to.
-    const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-    const productUrl = `${baseUrl}/product/${id}`;
-
-    // 2. Generate QR code as a PNG Buffer
-    bwipjs.toBuffer(
-      {
-        bcid: "qrcode", // Barcode type MUST be qrcode for phone scanning
-        text: productUrl, // The URL to scan
-        scale: 4, // Resolution
-      },
-      function (err, png) {
-        if (err) {
-          console.error("bwipjs error:", err);
-          return res
-            .status(500)
-            .json({ success: false, message: "Failed to generate QR code" });
-        } else {
-          // 3. Return the buffer as an image directly to the browser
-          res.setHeader("Content-Type", "image/png");
-          res.status(200).send(png);
-        }
-      },
-    );
-  } catch (error) {
-    console.error("Error generating QR:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal Server Error" });
-  }
-};
-
-export const getProductById = async (req: Request, res: Response) => {
-  try {
-    const id = req.params.id as string;
-    const product = await prisma.syringeOrder.findUnique({
-      where: { id },
-    });
-    if (!product) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found" });
-    }
-    return res.status(200).json({
-      success: true,
-      message: "Product fetched successfully",
-      data: product,
-    });
-  } catch (error) {
-    console.error("Error fetching product by id:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
-  }
-};
+  );
+});
 
 export const products = {
   addProducts,
   getAllProducts,
-  generateQR,
   getProductById,
+  generateQR,
 };
