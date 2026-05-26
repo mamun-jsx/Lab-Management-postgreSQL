@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import bcrypt from "bcrypt";
+import AppError from "../../errors/AppError";
 
 // Define TypeScript interfaces for our User Service layer
 interface IUserPayload {
@@ -66,6 +67,18 @@ const getUserByIdFromDB = async (id: string) => {
  * Updates an existing user's details and hashes password if modified
  */
 const updateUserInDB = async (id: string, payload: Partial<IUserPayload>) => {
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new AppError(404, "User account not found");
+  }
+
+  if (user.employeeId === "EMP-1" || user.employeeId === "EMP-2") {
+    throw new AppError(400, "Demo system administrator and user accounts cannot be updated.");
+  }
+
   const updateData: any = { ...payload };
 
   // If password is provided in the payload, hash it before database update
@@ -86,9 +99,34 @@ const updateUserInDB = async (id: string, payload: Partial<IUserPayload>) => {
  * Removes a user account from database
  */
 const deleteUserFromDB = async (id: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!user) {
+    throw new AppError(404, "User account not found");
+  }
+
+  if (user.employeeId === "EMP-1" || user.employeeId === "EMP-2") {
+    throw new AppError(400, "Demo system administrator and user accounts cannot be deleted.");
+  }
+
   const result = await prisma.user.delete({
     where: { id },
     select: safeUserSelection,
+  });
+  return result;
+};
+
+/**
+ * Retrieves a user by employeeId and email (including the password for validation)
+ */
+const getUserByCredentials = async (employeeId: string, email: string) => {
+  const result = await prisma.user.findFirst({
+    where: {
+      employeeId,
+      email,
+    },
   });
   return result;
 };
@@ -99,4 +137,5 @@ export const UserServices = {
   getUserByIdFromDB,
   updateUserInDB,
   deleteUserFromDB,
+  getUserByCredentials,
 };

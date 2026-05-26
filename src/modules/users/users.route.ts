@@ -1,13 +1,17 @@
 import { Router } from "express";
 import { UserControllers } from "./users.controller";
+import auth from "../../middlewares/auth";
 
 const userRoute = Router();
 
-// CRUD operations mapping
-userRoute.post("/", UserControllers.createUser);
-userRoute.get("/", UserControllers.getAllUsers);
-userRoute.get("/:id", UserControllers.getUserById);
-userRoute.put("/:id", UserControllers.updateUser);
-userRoute.delete("/:id", UserControllers.deleteUser);
+// Public login endpoint
+userRoute.post("/login", UserControllers.loginUser);
+
+// CRUD operations mapping (restricted to ADMIN/USER role appropriately)
+userRoute.post("/", auth("ADMIN"), UserControllers.createUser);
+userRoute.get("/", auth("ADMIN", "USER"), UserControllers.getAllUsers);
+userRoute.get("/:id", auth("ADMIN", "USER"), UserControllers.getUserById);
+userRoute.put("/:id", auth("ADMIN"), UserControllers.updateUser);
+userRoute.delete("/:id", auth("ADMIN"), UserControllers.deleteUser);
 
 export default userRoute;

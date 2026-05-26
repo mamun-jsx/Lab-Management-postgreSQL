@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import { UserServices } from "./users.service";
@@ -102,10 +104,60 @@ const deleteUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Authenticates user credentials and returns a JWT token
+ */
+const loginUser = catchAsync(async (req: Request, res: Response) => {
+  const { employeeId, email, password } = req.body;
+
+  if (!employeeId || !email || !password) {
+    throw new AppError(400, "All fields (employeeId, email, password) are required");
+  }
+
+  const user = await UserServices.getUserByCredentials(employeeId, email);
+  if (!user) {
+    throw new AppError(404, "Invalid credentials or user account does not exist");
+  }
+
+  const isPasswordMatch = await bcrypt.compare(password, user.password);
+  if (!isPasswordMatch) {
+    throw new AppError(401, "Invalid password credentials");
+  }
+
+  const jwtSecret = process.env.JWT_SECRET || "supersecretkey";
+  const token = jwt.sign(
+    { 
+      id: user.id, 
+      email: user.email, 
+      role: user.role, 
+      employeeId: user.employeeId 
+    },
+    jwtSecret,
+    { expiresIn: "7d" }
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Login successful",
+    data: {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        employeeId: user.employeeId,
+        role: user.role,
+      }
+    },
+  });
+});
+
 export const UserControllers = {
   createUser,
   getAllUsers,
   getUserById,
   updateUser,
   deleteUser,
+  loginUser,
 };
