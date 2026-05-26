@@ -11,7 +11,7 @@ userRoute.post("/login", UserControllers.loginUser);
 userRoute.post("/", auth("ADMIN"), UserControllers.createUser);
 userRoute.get("/", auth("ADMIN", "USER"), UserControllers.getAllUsers);
 userRoute.get("/:id", auth("ADMIN", "USER"), UserControllers.getUserById);
-userRoute.put("/:id", auth("ADMIN"), UserControllers.updateUser);
+userRoute.put("/:id", auth("ADMIN", "USER"), UserControllers.updateUser);
 userRoute.delete("/:id", auth("ADMIN"), UserControllers.deleteUser);
 
 export default userRoute;
